@@ -51,7 +51,12 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
+# Off by default: Ceph RGW accepts PutPublicAccessBlock but can't return it,
+# so the provider fails reading it back ("couldn't find resource"). The bucket
+# is private regardless: no ACL grants, and grantees get object access only
+# through the policy below, so they can't make it public themselves.
 resource "aws_s3_bucket_public_access_block" "this" {
+  count                   = var.public_access_block ? 1 : 0
   bucket                  = aws_s3_bucket.this.id
   block_public_acls       = true
   block_public_policy     = true
@@ -59,8 +64,11 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
-# Keep old state versions for recovery, but don't grow forever.
+# Expire old state versions. Off by default: after setting the rule the aws
+# provider waits for RGW to report the identical rule back, which RGW doesn't,
+# so it times out. Old versions are small; prune them manually if needed.
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
+  count  = var.noncurrent_version_days != null ? 1 : 0
   bucket = aws_s3_bucket.this.id
 
   rule {

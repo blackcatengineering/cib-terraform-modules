@@ -1,5 +1,11 @@
 # cib-terraform-modules
 
+> **Push this repo first.** Every other cib repo pulls modules from it by
+> git URL and tag (`...cib-terraform-modules.git//modules/<name>?ref=v1.0.0`).
+> Until it's on GitHub with a `v1.0.0` tag, `terraform init` fails everywhere
+> else, including the undercloud. Bring-up order: this repo → the
+> undercloud → the tenant template and `cib-tenants` (see `../MIGRATION.md`).
+
 One repo, many modules, one version tag. Replaces the old pattern where
 `start_here/github_module_upload.tf` created a GitHub repo per module and
 pushed files into it with Terraform.
@@ -17,6 +23,48 @@ modules/
 
 Platform-only pieces (Backstage, the ARC platform runners) live in
 `cib-undercloud/platform/modules`, not here: tenants never get them.
+
+## Create and push (first time)
+
+> **Use a GitHub organization, not your personal account.** All four repos
+> live in the same org, and the rest of the setup depends on it:
+> - **Tenant repos:** cib-tenants creates them under that owner.
+> - **Backstage:** its catalog reads the org's members and teams.
+> - **GitHub Apps:** the runner and Backstage apps are installed on the org.
+>
+> A free org is fine: create one at https://github.com/organizations/plan.
+
+```bash
+export GH_ORG=blackcatengineering          # your GitHub ORGANIZATION (not your username)
+
+# 1. From the folder holding all four repos: point everything at your org.
+#    Checks it's an organization (refuses personal accounts), then rewrites the
+#    module sources in all four repos and github_owner in the tfvars examples.
+./set-org.py "$GH_ORG" --dry-run     # see what would change
+./set-org.py "$GH_ORG"
+
+# 2. Create the repo and push
+cd cib-terraform-modules
+git init -b main
+git add .
+git commit -m "Initial import of cloud-in-a-box modules"
+gh repo create "$GH_ORG/cib-terraform-modules" --public --source=. --push   # public: modules hold no secrets
+
+# 3. Tag the first release; everything else pins ?ref=v1.0.0
+git tag v1.0.0
+git push origin v1.0.0
+
+# 4. Watch CI validate each module and publish the release
+gh run list --repo "$GH_ORG/cib-terraform-modules"
+gh release view v1.0.0 --repo "$GH_ORG/cib-terraform-modules"
+```
+
+**Public, on purpose.** The modules contain no secrets, and public means every
+pipeline (platform runners, tenant runners, your workstation) can
+`terraform init` without GitHub credentials. Keep secrets out of this repo for
+that reason: they belong in tfvars, pipeline secrets or Terraform state.
+
+Then push the other repos in the order above: each has its own README.
 
 ## Consuming
 
@@ -53,11 +101,24 @@ Now:
 `k8s-cluster` looks up `generic-k8s-<kubernetes_version>-template` by name.
 If the undercloud renames templates, bump the major version here.
 
-## Releasing
+## Changelog
 
-Merge to `main`, then `git tag v1.0.0 && git push --tags`. CI validates every
-module and creates the GitHub release. Semver: breaking variable/output
-changes are a major bump.
+- **v1.0.1:** `state-bucket` makes the public access block and lifecycle rule
+  optional and off by default. Ceph RGW can't return either to Terraform:
+  "couldn't find resource" on the access block, and a timeout waiting for the
+  lifecycle rule.
+- **v1.0.0:** first release.
+
+## Releasing a new version
+
+```bash
+git checkout main && git pull
+git tag v1.1.0          # semver: breaking variable/output changes are a major bump
+git push origin v1.1.0  # CI validates every module and creates the release
+```
+
+Consumers don't move until you change their `?ref=` (`grep -rn "ref=v1.0.0"`
+in the other repos), so a release never changes running infrastructure by itself.
 
 ## Provider versions
 

@@ -6,9 +6,12 @@ podSecurityContextOverride:
   fsGroupChangePolicy: "OnRootMismatch"
   supplementalGroups: 1000
 controller:
-  adminUsername: "admin" # username for jenkins
+  # No admin password here: the chart generates a random one into the
+  # "jenkins" secret. Retrieve it with:
+  #   kubectl get secret -n builder-system jenkins -o jsonpath='{.data.jenkins-admin-password}' | base64 -d
+  # (Previously hard-coded as admin/admin.)
   admin:
-    password: "admin" # password for jenkins
+    username: "admin"
   # installPlugins:
   #   - someplugin
   additionalPlugins:
@@ -19,7 +22,6 @@ controller:
   ingress:
     enabled: false
     paths: []
-    apiVersion: "extensions/v1beta1"
     hostname: "jenkins.example.com"
   JCasC:
     defaultConfig: true

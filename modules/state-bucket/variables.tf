@@ -21,9 +21,15 @@ variable "rgw_project_namespacing" {
 }
 
 variable "noncurrent_version_days" {
-  description = "How long superseded state versions are kept."
+  description = "Expire superseded state versions after this many days. null (default) = keep them; the lifecycle API isn't usable with Ceph RGW from Terraform."
   type        = number
-  default     = 90
+  default     = null
+}
+
+variable "public_access_block" {
+  description = "Add an S3 public access block. Off by default: Ceph RGW can't return it, so Terraform fails reading it back. Use on real S3."
+  type        = bool
+  default     = false
 }
 
 variable "tags" {
